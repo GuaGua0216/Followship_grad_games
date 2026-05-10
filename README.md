@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎓 團契送舊大挑戰：大學生生存遊戲 (College Survival Game)
 
-## Getting Started
+這是一款專為大專團契「送舊活動」設計的多人互動網頁遊戲。遊戲模擬了大學生從大一到大四的旅程，玩家必須在物價波動且未知的市場中做出購買決策，體驗充滿驚喜（或驚嚇）的大學生活！
 
-First, run the development server:
+## 🌟 遊戲背景與特色
+* **送舊專屬**：為大一到大四的團契契友量身打造，在遊戲中回顧大學四年的階段變化。
+* **盲買機制**：商品的價格會隨著「年級」波動，但玩家在購買當下無法得知價格與剩餘餘額，必須憑直覺下單！
+* **即時結算**：買定離手後，系統會自動揭曉該階段的真實物價與殘酷的剩餘資金。
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🎮 遊戲規則與流程
+每位玩家開局皆有 **30 元** 的起始資金，遊戲一共分為四個回合（對應四個核心畫面）：
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **🏠 畫面一：開始遊戲 (Start Game)**
+   - 玩家點擊「開始遊戲」按鈕，正式踏上大學旅程。
+   - 系統初始化玩家餘額為 30 元。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. **🏫 畫面二：選擇年級 (Select Grade)**
+   - 玩家選擇當前要進行的階段（大一、大二、大三、大四）。
+   - 首次遊玩將從「大一」開始。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. **🛒 畫面三：購買商品 (Buy Items)**
+   - 畫面上提供 3 種商品供玩家輸入「購買數量」。
+   - **⚠️ 挑戰點**：此頁面刻意「隱藏」當前物價與玩家餘額。價格陣列（如 `ItemA: [3, 5, 1, 2]`）已在系統背景寫死，隨機且不可預測。
+   - 確認數量後點擊「確定」，系統將在背景執行扣款運算。
 
-## Learn More
+4. **🎉 畫面四：公布結果 (Show Results)**
+   - 畫面顯示：`「恭喜從 {大X} 畢業了！」`
+   - **大揭密**：公開剛剛購買的商品在該年級的實際價格，以及玩家最新的「剩餘餘額」。
+   - 畫面角落設有「返回選擇年級」按鈕，讓玩家進入下一回合，直到大四畢業！
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ 技術棧 (Tech Stack)
+* **Framework:** Next.js (React)
+* **Styling:** Tailwind CSS
+* **State Management:** React Hooks
