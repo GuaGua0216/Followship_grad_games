@@ -17,7 +17,7 @@ const glassButton =
 const glassPanel =
   "rounded-lg border border-white/65 bg-white/70 shadow-xl shadow-black/15 backdrop-blur-md";
 const beachCard =
-  "rounded-lg border border-white/65 bg-white/75 shadow-md shadow-black/10 backdrop-blur-sm";
+  "rounded-lg border border-white/60 bg-white/60 shadow-md shadow-black/10 backdrop-blur-sm";
 
 type ProductName = (typeof products)[number]["name"];
 type Stage = (typeof stages)[number];
