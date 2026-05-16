@@ -7,17 +7,19 @@ const INITIAL_BALANCE = 30;
 const stages = ["大一", "大二", "大三", "大四"] as const;
 
 const products = [
-  { name: "商品A", prices: [3, 5, 1, 2] },
-  { name: "商品B", prices: [1, 2, 1, 4] },
-  { name: "商品C", prices: [1, 3, 3, 6] },
+  { name: "顏值", prices: [3, 5, 3, 1] },
+  { name: "人際", prices: [4, 5, 3, 2] },
+  { name: "信仰", prices: [3, 2, 3, 5] },
+  { name: "錢$$", prices: [2, 2, 3, 4] },
+  { name: "技能", prices: [2, 3, 4, 5] }
 ] as const;
 
 const glassButton =
   "rounded-md border border-white/70 bg-white/15 px-5 py-3 font-bold text-white shadow-lg shadow-black/20 backdrop-blur-md transition hover:-translate-y-0.5 hover:bg-white/25 hover:shadow-xl disabled:cursor-not-allowed disabled:border-white/25 disabled:bg-white/10 disabled:text-white/45 disabled:shadow-none disabled:hover:translate-y-0";
 const glassPanel =
-  "rounded-lg border border-white/65 bg-white/70 shadow-xl shadow-black/15 backdrop-blur-md";
+  "rounded-lg border border-white/35 bg-white/35 shadow-xl shadow-black/20 backdrop-blur-xl";
 const beachCard =
-  "rounded-lg border border-white/60 bg-white/60 shadow-md shadow-black/10 backdrop-blur-sm";
+  "rounded-lg border border-white/30 bg-white/30 shadow-md shadow-black/15 backdrop-blur-lg";
 
 type ProductName = (typeof products)[number]["name"];
 type Stage = (typeof stages)[number];
@@ -312,13 +314,16 @@ export default function Home() {
                 選擇這一回合要買入或賣出的數量
               </h2>
               <p className="mt-3 font-semibold text-white drop-shadow">
-                本頁不顯示商品價格與目前餘額；賣出數量不能超過已持有數量。
+                {selectedStageIndex === 0
+                  ? "本頁不顯示商品價格；賣出數量不能超過已持有數量。"
+                  : `本頁會顯示${selectedStage}的商品價格；賣出數量不能超過已持有數量。`}
               </p>
 
               <div className="mt-8 grid gap-4">
                 {products.map((product) => {
                   const sellTooMany =
                     trade.sell[product.name] > inventory[product.name];
+                  const stagePrice = product.prices[selectedStageIndex];
 
                   return (
                     <div className={`${beachCard} p-5`} key={product.name}>
@@ -327,6 +332,11 @@ export default function Home() {
                           <p className="text-xl font-black text-[#063c43]">
                             {product.name}
                           </p>
+                          {selectedStageIndex === 0 ? null : (
+                            <p className="mt-1 text-sm font-semibold text-[#0f7480]">
+                              {selectedStage} 價格 {stagePrice} 元
+                            </p>
+                          )}
                           <p className="mt-1 text-sm font-semibold text-[#31717a]">
                             目前持有 {inventory[product.name]} 個
                           </p>
