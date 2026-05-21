@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { db } from "@/lib/firebase";
 
 const INITIAL_BALANCE = 30;
 
