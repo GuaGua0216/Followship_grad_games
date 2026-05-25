@@ -1,6 +1,6 @@
 // 1. 引入 Firebase 核心與 Firestore 資料庫模組
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -22,4 +22,14 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 4. 初始化我們需要的 Firestore 資料庫，並將它匯出 (export)
-export const db = getFirestore(app);
+// experimentalAutoDetectLongPolling can make Firestore more reliable in
+// browsers/networks that block the default streaming transport.
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
+    return getFirestore(app);
+  }
+})();

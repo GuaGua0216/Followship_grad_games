@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 const INITIAL_BALANCE = 30;
 
@@ -23,7 +35,7 @@ const beachCard =
 
 type ProductName = (typeof products)[number]["name"];
 type Stage = (typeof stages)[number];
-type Screen = "start" | "stage" | "shop" | "result";
+type Screen = "nickname" | "start" | "stage" | "shop" | "result" | "leaderboard";
 type ProductNumbers = Record<ProductName, number>;
 
 type Trade = {
@@ -32,6 +44,13 @@ type Trade = {
 };
 
 type RoundResult = ReturnType<typeof calculateRound>;
+
+type LeaderboardPlayer = {
+  id: string;
+  nickname: string;
+  balance: number;
+  rank: number;
+};
 
 const initialProductNumbers = products.reduce((acc, product) => {
   acc[product.name] = 0;
@@ -85,8 +104,23 @@ function makeEmptyTrade(): Trade {
   };
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "未知錯誤";
+}
+
 export default function Home() {
-  const [screen, setScreen] = useState<Screen>("start");
+  const [screen, setScreen] = useState<Screen>("nickname");
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [playerId, setPlayerId] = useState("");
+  const [isSavingNickname, setIsSavingNickname] = useState(false);
+  const [isSavingScore, setIsSavingScore] = useState(false);
+  const [firestoreError, setFirestoreError] = useState("");
+  const [leaderboard, setLeaderboard] = useState<LeaderboardPlayer[]>([]);
   const [balance, setBalance] = useState(INITIAL_BALANCE);
   const [inventory, setInventory] = useState<ProductNumbers>({
     ...initialProductNumbers,
@@ -109,12 +143,115 @@ export default function Home() {
   );
   const canConfirmTrade = !hasInvalidSell && liveBalance >= 0;
   const allStagesDone = completedStages.every(Boolean);
+  const trimmedNickname = nicknameInput.trim();
+
+  useEffect(() => {
+    const leaderboardQuery = query(
+      collection(db, "players"),
+      orderBy("balance", "desc"),
+    );
+
+    return onSnapshot(
+      leaderboardQuery,
+      (snapshot) => {
+        const players = snapshot.docs.map((playerDoc, index) => {
+          const data = playerDoc.data();
+
+          return {
+            id: playerDoc.id,
+            nickname:
+              typeof data.nickname === "string" ? data.nickname : "未命名",
+            balance: typeof data.balance === "number" ? data.balance : 0,
+            rank: index + 1,
+            storedRank: typeof data.rank === "number" ? data.rank : null,
+          };
+        });
+
+        setLeaderboard(players);
+
+        const playersNeedingRankUpdate = players.filter(
+          (player) => player.storedRank !== player.rank,
+        );
+
+        if (playersNeedingRankUpdate.length > 0) {
+          const batch = writeBatch(db);
+
+          playersNeedingRankUpdate.forEach((player) => {
+            batch.update(doc(db, "players", player.id), {
+              rank: player.rank,
+              rankedAt: serverTimestamp(),
+            });
+          });
+
+          batch.commit().catch((error) => {
+            console.error("Failed to update leaderboard ranks:", error);
+            setFirestoreError(
+              `排行榜名次更新失敗：${getErrorMessage(error)}`,
+            );
+          });
+        }
+      },
+      (error) => {
+        console.error("Failed to read leaderboard:", error);
+        setFirestoreError(`排行榜讀取失敗：${getErrorMessage(error)}`);
+      },
+    );
+  }, []);
 
   useEffect(() => {
     if (screen === "result") {
       window.scrollTo({ top: 0, behavior: "auto" });
     }
   }, [screen]);
+
+  async function submitNickname() {
+    if (!trimmedNickname) {
+      setFirestoreError("請先輸入暱稱。");
+      return;
+    }
+
+    setIsSavingNickname(true);
+    setFirestoreError("");
+
+    try {
+      const playerRef = await addDoc(collection(db, "players"), {
+        nickname: trimmedNickname,
+        createdAt: serverTimestamp(),
+      });
+
+      setPlayerId(playerRef.id);
+      setNickname(trimmedNickname);
+      setScreen("start");
+    } catch (error) {
+      console.error("Failed to save nickname:", error);
+      setFirestoreError(`暱稱儲存失敗：${getErrorMessage(error)}`);
+    } finally {
+      setIsSavingNickname(false);
+    }
+  }
+
+  async function saveFinalScore(finalBalance: number) {
+    if (!playerId) {
+      setFirestoreError("找不到玩家資料，請重新輸入暱稱。");
+      return;
+    }
+
+    setIsSavingScore(true);
+    setFirestoreError("");
+
+    try {
+      await updateDoc(doc(db, "players", playerId), {
+        nickname,
+        balance: finalBalance,
+        completedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Failed to save final score:", error);
+      setFirestoreError(`成績儲存失敗：${getErrorMessage(error)}`);
+    } finally {
+      setIsSavingScore(false);
+    }
+  }
 
   function startGame() {
     setBalance(INITIAL_BALANCE);
@@ -196,6 +333,10 @@ export default function Home() {
     );
     setRoundResult(result);
     setScreen("result");
+
+    if (selectedStageIndex === stages.length - 1) {
+      void saveFinalScore(result.balanceAfter);
+    }
   }
 
   function backToStages() {
@@ -220,6 +361,60 @@ export default function Home() {
         </header>
 
         <section className="flex flex-1 items-center py-10">
+          {screen === "nickname" ? (
+            <div className="grid w-full gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+              <div>
+                <p className="text-sm font-semibold text-white/85 drop-shadow">
+                  輸入暱稱
+                </p>
+                <h2 className="mt-2 text-3xl font-black text-white drop-shadow-lg">
+                  開始前先留下你的玩家名稱
+                </h2>
+                <p className="mt-3 max-w-2xl text-lg font-semibold leading-8 text-white drop-shadow">
+                  這個暱稱會用在遊戲結束後的排行榜，最後會依照剩餘額由高到低排序。
+                </p>
+              </div>
+
+              <div className={`${glassPanel} p-6 text-[#06434b]`}>
+                <label htmlFor="player-nickname">
+                  <span className="mb-2 block text-sm font-bold text-[#31717a]">
+                    暱稱
+                  </span>
+                  <input
+                    className="h-12 w-full rounded-md border border-white/70 bg-white/55 px-4 text-lg font-bold text-[#06434b] outline-none transition focus:border-[#83d2e4] focus:ring-4 focus:ring-[#83d2e4]/25"
+                    id="player-nickname"
+                    maxLength={20}
+                    name="nickname"
+                    onChange={(event) => setNicknameInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        void submitNickname();
+                      }
+                    }}
+                    placeholder="輸入你的暱稱"
+                    type="text"
+                    value={nicknameInput}
+                  />
+                </label>
+
+                {firestoreError ? (
+                  <p className="mt-3 text-sm font-bold text-[#0f7480]">
+                    {firestoreError}
+                  </p>
+                ) : null}
+
+                <button
+                  className={`${glassButton} mt-6 w-full px-7 py-4 text-lg`}
+                  disabled={isSavingNickname || !trimmedNickname}
+                  onClick={() => void submitNickname()}
+                  type="button"
+                >
+                  {isSavingNickname ? "儲存中..." : "確認暱稱"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {screen === "start" ? (
             <div className="grid w-full gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
               <div>
@@ -372,13 +567,15 @@ export default function Home() {
                             目前持有 {inventory[product.name]} 個
                           </p>
                         </div>
-                        <label>
+                        <label htmlFor={`${product.name}-buy-quantity`}>
                           <span className="mb-2 block text-sm font-bold text-[#115b63]">
                             買入數量
                           </span>
                           <input
                             className="h-12 w-full rounded-md border border-white/70 bg-white/55 px-4 text-lg font-bold text-[#06434b] outline-none transition focus:border-[#83d2e4] focus:ring-4 focus:ring-[#83d2e4]/25"
+                            id={`${product.name}-buy-quantity`}
                             min="0"
+                            name={`${product.name}-buy-quantity`}
                             onChange={(event) =>
                               updateTrade(
                                 "buy",
@@ -390,7 +587,7 @@ export default function Home() {
                             value={trade.buy[product.name]}
                           />
                         </label>
-                        <label>
+                        <label htmlFor={`${product.name}-sell-quantity`}>
                           <span className="mb-2 block text-sm font-bold text-[#115b63]">
                             賣出數量
                           </span>
@@ -401,7 +598,9 @@ export default function Home() {
                                 ? "border-[#168da0] bg-[#dff7fb]/70 hover:border-[#0f7480] focus:border-[#0f7480] focus:ring-[#83d2e4]/40"
                                 : "border-white/70 focus:border-[#83d2e4] focus:ring-[#83d2e4]/25",
                             ].join(" ")}
+                            id={`${product.name}-sell-quantity`}
                             min="0"
+                            name={`${product.name}-sell-quantity`}
                             onChange={(event) =>
                               updateTrade(
                                 "sell",
@@ -496,11 +695,86 @@ export default function Home() {
 
               <button
                 className={`${glassButton} mt-8 px-7 py-4 text-lg`}
-                onClick={backToStages}
+                disabled={
+                  selectedStageIndex === stages.length - 1 && isSavingScore
+                }
+                onClick={
+                  selectedStageIndex === stages.length - 1
+                    ? () => setScreen("leaderboard")
+                    : backToStages
+                }
                 type="button"
               >
-                返回選擇年級
+                {selectedStageIndex === stages.length - 1
+                  ? isSavingScore
+                    ? "成績儲存中..."
+                    : "查看排行榜"
+                  : "返回選擇年級"}
               </button>
+            </div>
+          ) : null}
+
+          {screen === "leaderboard" ? (
+            <div className="w-full">
+              <p className="text-sm font-semibold text-white/85 drop-shadow">
+                排行榜
+              </p>
+              <h2 className="mt-2 text-3xl font-black text-white drop-shadow-lg">
+                餘額排名
+              </h2>
+              <p className="mt-3 font-semibold text-white drop-shadow">
+                每次有玩家提交結果時，排行榜會依照餘額由高到低自動更新。
+              </p>
+
+              {firestoreError ? (
+                <p className="mt-5 rounded-md border border-white/40 bg-white/30 px-4 py-3 text-sm font-bold text-white backdrop-blur-md">
+                  {firestoreError}
+                </p>
+              ) : null}
+
+              <div className="mt-8">
+                {leaderboard.length > 0 ? (
+                  <div className={`${beachCard} overflow-hidden text-[#06434b]`}>
+                    <table className="w-full table-fixed border-collapse">
+                      <thead className="border-b border-white/40 bg-white/35">
+                        <tr>
+                          <th className="w-20 px-4 py-4 text-left text-sm font-black text-[#0f7480] sm:w-28">
+                            排名
+                          </th>
+                          <th className="px-4 py-4 text-left text-sm font-black text-[#0f7480]">
+                            暱稱
+                          </th>
+                          <th className="w-24 px-4 py-4 text-right text-sm font-black text-[#0f7480] sm:w-32">
+                            餘額
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaderboard.map((player) => (
+                          <tr
+                            className="border-b border-white/30 last:border-b-0"
+                            key={player.id}
+                          >
+                            <td className="px-4 py-4 text-xl font-black">
+                              #{player.rank}
+                            </td>
+                            <td className="truncate px-4 py-4 text-lg font-black">
+                              {player.nickname}
+                            </td>
+                            <td className="px-4 py-4 text-right text-lg font-black text-[#057486]">
+                              {player.balance} 元
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className={`${glassPanel} p-6 text-[#06434b]`}>
+                    <p className="text-lg font-bold">目前還沒有提交結果。</p>
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
         </section>
