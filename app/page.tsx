@@ -5,11 +5,14 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -223,6 +226,19 @@ export default function Home() {
     setFirestoreError("");
 
     try {
+      const nicknameSnapshot = await getDocs(
+        query(
+          collection(db, "players"),
+          where("nickname", "==", trimmedNickname),
+          limit(1),
+        ),
+      );
+
+      if (!nicknameSnapshot.empty) {
+        setFirestoreError("這個暱稱已經有人使用，請換一個暱稱。");
+        return;
+      }
+
       const playerRef = await addDoc(collection(db, "players"), {
         nickname: trimmedNickname,
         createdAt: serverTimestamp(),
