@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { db } from "@/lib/firebase";
+import { useEffect, useState } from "react";
 
 const INITIAL_BALANCE = 30;
 
@@ -97,6 +96,7 @@ export default function Home() {
   );
   const [selectedStage, setSelectedStage] = useState<Stage>("大一");
   const [trade, setTrade] = useState<Trade>(makeEmptyTrade);
+  const [liveBalance, setLiveBalance] = useState(INITIAL_BALANCE);
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
 
   const selectedStageIndex = stages.indexOf(selectedStage);
@@ -107,8 +107,14 @@ export default function Home() {
   const hasInvalidSell = products.some(
     (product) => trade.sell[product.name] > inventory[product.name],
   );
-  const canConfirmTrade = !hasInvalidSell;
+  const canConfirmTrade = !hasInvalidSell && liveBalance >= 0;
   const allStagesDone = completedStages.every(Boolean);
+
+  useEffect(() => {
+    if (screen === "result") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+  }, [screen]);
 
   function startGame() {
     setBalance(INITIAL_BALANCE);
@@ -116,6 +122,7 @@ export default function Home() {
     setCompletedStages(stages.map(() => false));
     setSelectedStage("大一");
     setTrade(makeEmptyTrade());
+    setLiveBalance(INITIAL_BALANCE);
     setRoundResult(null);
     setScreen("stage");
   }
@@ -123,6 +130,7 @@ export default function Home() {
   function chooseStage(stage: Stage) {
     setSelectedStage(stage);
     setTrade(makeEmptyTrade());
+    setLiveBalance(balance);
     setRoundResult(null);
     setScreen("shop");
   }
@@ -135,26 +143,44 @@ export default function Home() {
     const parsedValue = Number.parseInt(value || "0", 10);
     const nextValue = Number.isNaN(parsedValue) ? 0 : Math.max(0, parsedValue);
 
-    setTrade((current) => ({
-      ...current,
-      [action]: {
-        ...current[action],
-        [productName]: nextValue,
-      },
-    }));
+    setTrade((current) => {
+      const nextTrade = {
+        ...current,
+        [action]: {
+          ...current[action],
+          [productName]: nextValue,
+        },
+      };
+      const hasInvalidSellInNextTrade = products.some(
+        (product) => nextTrade.sell[product.name] > inventory[product.name],
+      );
+
+      if (!hasInvalidSellInNextTrade) {
+        setLiveBalance(
+          calculateRound(
+            selectedStageIndex,
+            nextTrade,
+            balance,
+            inventory,
+          ).balanceAfter,
+        );
+      }
+
+      return nextTrade;
+    });
   }
 
   function confirmTrade() {
-    if (!canConfirmTrade) {
-      return;
-    }
-
     const result = calculateRound(
       selectedStageIndex,
       trade,
       balance,
       inventory,
     );
+
+    if (!canConfirmTrade || result.balanceAfter < 0) {
+      return;
+    }
 
     const nextInventory = { ...inventory };
     result.items.forEach((item) => {
@@ -174,6 +200,7 @@ export default function Home() {
 
   function backToStages() {
     setTrade(makeEmptyTrade());
+    setLiveBalance(balance);
     setRoundResult(null);
     setScreen("stage");
   }
@@ -190,11 +217,6 @@ export default function Home() {
               畢業採購遊戲
             </h1>
           </div>
-          {screen !== "start" ? (
-            <button className={glassButton} onClick={backToStages} type="button">
-              返回選擇年級
-            </button>
-          ) : null}
         </header>
 
         <section className="flex flex-1 items-center py-10">
@@ -203,7 +225,7 @@ export default function Home() {
               <div>
                 <p className="max-w-2xl text-lg font-semibold leading-8 text-white drop-shadow">
                   每位玩家一開始都有 30 元。每個年級都有不同商品價格，
-                  玩家可以買入或賣出商品，但價格要等本回合結束才公布。
+                  玩家可以買入或賣出商品，交易頁會顯示當前年級的商品價格。
                 </p>
                 <button
                   className={`${glassButton} mt-8 px-7 py-4 text-lg`}
@@ -315,10 +337,20 @@ export default function Home() {
                 選擇這一回合要買入或賣出的數量
               </h2>
               <p className="mt-3 font-semibold text-white drop-shadow">
-                {selectedStageIndex === 0
-                  ? "本頁不顯示商品價格；賣出數量不能超過已持有數量。"
-                  : `本頁會顯示${selectedStage}的商品價格；賣出數量不能超過已持有數量。`}
+                本頁會顯示{selectedStage}的商品價格；賣出數量不能超過已持有數量。
               </p>
+
+              <div className={`${glassPanel} mt-6 inline-block p-5 text-[#06434b]`}>
+                <p className="text-sm font-bold text-[#31717a]">即時餘額</p>
+                <p className="mt-1 text-3xl font-black text-[#057486]">
+                  {liveBalance} 元
+                </p>
+                {liveBalance < 0 ? (
+                  <p className="mt-2 text-sm font-bold text-[#0f7480]">
+                    即時餘額小於 0 元，無法完成交易。
+                  </p>
+                ) : null}
+              </div>
 
               <div className="mt-8 grid gap-4">
                 {products.map((product) => {
@@ -333,11 +365,9 @@ export default function Home() {
                           <p className="text-xl font-black text-[#063c43]">
                             {product.name}
                           </p>
-                          {selectedStageIndex === 0 ? null : (
-                            <p className="mt-1 text-sm font-semibold text-[#0f7480]">
-                              {selectedStage} 價格 {stagePrice} 元
-                            </p>
-                          )}
+                          <p className="mt-1 text-sm font-semibold text-[#0f7480]">
+                            {selectedStage} 價格 {stagePrice} 元
+                          </p>
                           <p className="mt-1 text-sm font-semibold text-[#31717a]">
                             目前持有 {inventory[product.name]} 個
                           </p>
@@ -463,6 +493,14 @@ export default function Home() {
                   </p>
                 </div>
               </div>
+
+              <button
+                className={`${glassButton} mt-8 px-7 py-4 text-lg`}
+                onClick={backToStages}
+                type="button"
+              >
+                返回選擇年級
+              </button>
             </div>
           ) : null}
         </section>
