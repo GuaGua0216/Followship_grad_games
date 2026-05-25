@@ -154,15 +154,24 @@ export default function Home() {
     return onSnapshot(
       leaderboardQuery,
       (snapshot) => {
+        let previousBalance: number | null = null;
+        let currentRank = 0;
+
         const players = snapshot.docs.map((playerDoc, index) => {
           const data = playerDoc.data();
+          const balance = typeof data.balance === "number" ? data.balance : 0;
+
+          if (previousBalance === null || balance !== previousBalance) {
+            currentRank = index + 1;
+            previousBalance = balance;
+          }
 
           return {
             id: playerDoc.id,
             nickname:
               typeof data.nickname === "string" ? data.nickname : "未命名",
-            balance: typeof data.balance === "number" ? data.balance : 0,
-            rank: index + 1,
+            balance,
+            rank: currentRank,
             storedRank: typeof data.rank === "number" ? data.rank : null,
           };
         });
